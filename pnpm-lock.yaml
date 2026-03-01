@@ -91,15 +91,24 @@ importers:
       '@molgame/shared':
         specifier: workspace:*
         version: link:../../packages/shared
+      '@supabase/supabase-js':
+        specifier: ^2.49.0
+        version: 2.98.0
       '@tanstack/react-query':
         specifier: ^5.68.0
         version: 5.90.21(react@19.2.4)
+      argon2:
+        specifier: ^0.41.0
+        version: 0.41.1
       clsx:
         specifier: ^2.1.0
         version: 2.1.1
       framer-motion:
         specifier: ^12.4.0
         version: 12.34.3(react-dom@19.2.4(react@19.2.4))(react@19.2.4)
+      nanoid:
+        specifier: ^5.1.0
+        version: 5.1.6
       next:
         specifier: ^15.2.0
         version: 15.5.12(react-dom@19.2.4(react@19.2.4))(react@19.2.4)
