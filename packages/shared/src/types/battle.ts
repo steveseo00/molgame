@@ -1,4 +1,4 @@
-import type { Card } from "./card.js";
+import type { Card } from "./card";
 
 export type BattleMode = "ranked" | "casual" | "tournament";
 

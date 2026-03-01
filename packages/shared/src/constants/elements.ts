@@ -1,4 +1,4 @@
-import type { Element } from "../types/card.js";
+import type { Element } from "../types/card";
 
 export const ELEMENTS: Element[] = ["fire", "water", "lightning", "nature", "shadow", "light"];
 

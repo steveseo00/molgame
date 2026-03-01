@@ -1,4 +1,4 @@
-import type { Rarity } from "../types/card.js";
+import type { Rarity } from "../types/card";
 
 export interface RarityConfig {
   probability: number;
