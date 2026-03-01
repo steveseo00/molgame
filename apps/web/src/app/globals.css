@@ -1,0 +1,58 @@
+@import "tailwindcss";
+
+@theme {
+  --color-fire: #EF4444;
+  --color-water: #3B82F6;
+  --color-lightning: #F59E0B;
+  --color-nature: #22C55E;
+  --color-shadow: #7C3AED;
+  --color-light: #FBBF24;
+
+  --color-common: #9CA3AF;
+  --color-rare: #3B82F6;
+  --color-epic: #A855F7;
+  --color-legendary: #F59E0B;
+
+  --color-bg-primary: #0a0a0f;
+  --color-bg-secondary: #12121a;
+  --color-bg-card: #1a1a2e;
+  --color-accent: #e94560;
+  --color-accent-secondary: #0f3460;
+  --color-text-primary: #eaeaea;
+  --color-text-secondary: #a0a0b0;
+}
+
+body {
+  background: var(--color-bg-primary);
+  color: var(--color-text-primary);
+}
+
+/* Card rarity glows */
+.glow-common { box-shadow: 0 0 8px var(--color-common); }
+.glow-rare { box-shadow: 0 0 12px var(--color-rare); }
+.glow-epic { box-shadow: 0 0 16px var(--color-epic); }
+.glow-legendary {
+  box-shadow: 0 0 20px var(--color-legendary), 0 0 40px var(--color-legendary);
+  animation: legendary-pulse 2s ease-in-out infinite;
+}
+
+@keyframes legendary-pulse {
+  0%, 100% { box-shadow: 0 0 20px var(--color-legendary), 0 0 40px var(--color-legendary); }
+  50% { box-shadow: 0 0 30px var(--color-legendary), 0 0 60px var(--color-legendary); }
+}
+
+/* Battle effects */
+@keyframes shake {
+  0%, 100% { transform: translateX(0); }
+  25% { transform: translateX(-4px); }
+  75% { transform: translateX(4px); }
+}
+
+.animate-shake { animation: shake 0.3s ease-in-out; }
+
+@keyframes damage-flash {
+  0%, 100% { opacity: 0; }
+  50% { opacity: 0.5; }
+}
+
+.animate-damage { animation: damage-flash 0.4s ease-out; }

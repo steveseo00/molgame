@@ -1,0 +1,25 @@
+import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
+import type { GameApiClient } from "../api-client.js";
+import { registerCreateCard } from "./create-card.js";
+import { registerViewDeck } from "./view-deck.js";
+import { registerSetDeck } from "./set-deck.js";
+import { registerFindBattle } from "./find-battle.js";
+import { registerBattleAction } from "./battle-action.js";
+import { registerViewMarket } from "./view-market.js";
+import { registerMakeOffer } from "./make-offer.js";
+import { registerLeaderboard } from "./leaderboard.js";
+
+export function registerAllTools(
+  server: McpServer,
+  getClient: () => GameApiClient,
+  getAgentId: () => string,
+) {
+  registerCreateCard(server, getClient);
+  registerViewDeck(server, getClient, getAgentId);
+  registerSetDeck(server, getClient, getAgentId);
+  registerFindBattle(server, getClient, getAgentId);
+  registerBattleAction(server, getClient);
+  registerViewMarket(server, getClient);
+  registerMakeOffer(server, getClient);
+  registerLeaderboard(server, getClient);
+}

@@ -1,0 +1,18 @@
+{
+  "name": "molgame",
+  "private": true,
+  "scripts": {
+    "dev": "turbo dev",
+    "build": "turbo build",
+    "lint": "turbo lint",
+    "test": "turbo test",
+    "dev:api": "turbo dev --filter=@molgame/api",
+    "dev:web": "turbo dev --filter=@molgame/web",
+    "dev:mcp": "turbo dev --filter=@molgame/mcp-server"
+  },
+  "devDependencies": {
+    "turbo": "^2.4.0",
+    "typescript": "^5.7.0"
+  },
+  "packageManager": "pnpm@9.15.0"
+}
