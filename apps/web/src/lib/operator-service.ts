@@ -139,6 +139,63 @@ export async function linkAgentToOperator(agentId: string, operatorId: string) {
   if (error) throw error;
 }
 
+// --- Agent Deletion ---
+
+export async function deleteAgent(agentId: string, operatorId: string) {
+  // Verify the agent belongs to this operator
+  const { data: agent, error: agentError } = await supabase
+    .from("agents")
+    .select("id, name, operator_id")
+    .eq("id", agentId)
+    .single();
+
+  if (agentError || !agent) throw new Error("Agent not found");
+  if (agent.operator_id !== operatorId) throw new Error("Agent does not belong to this operator");
+
+  // Clean up related data in order to avoid FK violations
+  // 1. matchmaking_queue, battle_pending_actions
+  await supabase.from("matchmaking_queue").delete().eq("agent_id", agentId);
+  await supabase.from("battle_pending_actions").delete().eq("agent_id", agentId);
+
+  // 2. card_sessions
+  await supabase.from("card_sessions").delete().eq("agent_id", agentId);
+
+  // 3. agent_badges, agent_penalties
+  await supabase.from("agent_badges").delete().eq("agent_id", agentId);
+  await supabase.from("agent_penalties").delete().eq("agent_id", agentId);
+
+  // 4. Cancel pending trade offers
+  await supabase.from("trade_offers").update({ status: "cancelled" }).eq("from_agent_id", agentId).eq("status", "pending");
+  await supabase.from("trade_offers").update({ status: "cancelled" }).eq("to_agent_id", agentId).eq("status", "pending");
+
+  // 5. Cancel active auctions and re-enable card tradeability
+  const { data: auctions } = await supabase.from("auctions").select("id, card_id").eq("seller_id", agentId).eq("status", "active");
+  for (const auction of auctions ?? []) {
+    await supabase.from("cards").update({ is_tradeable: true }).eq("id", auction.card_id);
+  }
+  await supabase.from("auctions").update({ status: "cancelled" }).eq("seller_id", agentId).eq("status", "active");
+
+  // 6. Nullify battle references (preserve history)
+  await supabase.from("battles").update({ agent_a_id: null }).eq("agent_a_id", agentId);
+  await supabase.from("battles").update({ agent_b_id: null }).eq("agent_b_id", agentId);
+  await supabase.from("battles").update({ winner_id: null }).eq("winner_id", agentId);
+
+  // 7. Delete owned cards (card_skills cascade via ON DELETE CASCADE)
+  const { data: cards } = await supabase.from("cards").select("id").eq("owner_id", agentId);
+  for (const card of cards ?? []) {
+    await supabase.from("card_skills").delete().eq("card_id", card.id);
+    await supabase.from("cards").delete().eq("id", card.id);
+  }
+  // Nullify creator_id on cards created by this agent but owned by others
+  await supabase.from("cards").update({ creator_id: null }).eq("creator_id", agentId);
+
+  // 8. Delete the agent (decks cascade via ON DELETE CASCADE)
+  const { error: deleteError } = await supabase.from("agents").delete().eq("id", agentId);
+  if (deleteError) throw deleteError;
+
+  return { agent_id: agentId, agent_name: agent.name };
+}
+
 // --- Agent Registration ---
 
 export async function registerAgent(data: { name: string; owner_email: string; description?: string; model_type?: string; avatar_url?: string; webhook_url?: string; referral_code?: string }) {

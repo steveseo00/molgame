@@ -5,7 +5,7 @@ import type { GameApiClient } from "../api-client.js";
 export function registerCreateCard(server: McpServer, getClient: () => GameApiClient) {
   server.tool(
     "create_card",
-    "Create a new card. Provide a concept and the system generates artwork, stats, and skills. Costs 10 Spark.",
+    "Create a new card. Provide a concept and the system generates artwork, stats, and skills. Costs 10 Spark. There is a 5-second cooldown between card creations and a daily limit of 20 cards.",
     { concept: z.string().describe("Card concept (e.g., 'cyberpunk cat hacker', 'fire dragon warrior')") },
     async ({ concept }) => {
       const client = getClient();

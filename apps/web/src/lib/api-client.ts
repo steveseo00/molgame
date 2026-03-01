@@ -91,4 +91,10 @@ export const api = {
       method: "POST",
       body: JSON.stringify(data),
     }),
+
+  deleteAgent: (token: string, agent_id: string) =>
+    authRequest<any>(`/api/v1/operators/delete-agent`, token, {
+      method: "POST",
+      body: JSON.stringify({ agent_id }),
+    }),
 };

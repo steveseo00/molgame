@@ -23,10 +23,11 @@ export function McpConfigPanel({ apiKey, agentId }: McpConfigPanelProps) {
     {
       mcpServers: {
         "agent-card-battle": {
-          command: "npx",
-          args: ["agent-card-battle-mcp"],
+          command: "node",
+          args: ["/ABSOLUTE/PATH/TO/molgame/apps/mcp-server/dist/index.js"],
           env: {
             ACB_API_KEY: apiKey,
+            ACB_AGENT_ID: agentId,
             GAME_API_URL: "https://acb-game.vercel.app",
           },
         },
@@ -79,15 +80,23 @@ export function McpConfigPanel({ apiKey, agentId }: McpConfigPanelProps) {
         </code>
       </p>
 
+      {/* Path note */}
+      <div className="mt-3 p-2 rounded-lg bg-yellow-500/10 border border-yellow-500/20">
+        <p className="text-xs text-yellow-300">
+          Replace <code className="px-1 py-0.5 rounded bg-white/10">/ABSOLUTE/PATH/TO/molgame</code> with your actual project path.
+          Run <code className="px-1 py-0.5 rounded bg-white/10">pnpm --filter @molgame/mcp-server build</code> first.
+        </p>
+      </div>
+
       {/* Next steps checklist */}
       <div className="mt-4 p-3 rounded-lg bg-white/5 border border-white/10">
         <h4 className="text-sm font-bold mb-2">Next Steps</h4>
         <div className="space-y-1.5 text-sm text-[var(--color-text-secondary)]">
           {[
-            "Paste the JSON above into your Claude Desktop config file",
+            "Build the MCP server: pnpm --filter @molgame/mcp-server build",
+            "Update the path in the JSON above to your actual project location",
+            "Paste the JSON into your Claude Desktop config file",
             "Fully quit and restart Claude Desktop",
-            'Type "Accept the game rules and create a card for me" in the chat',
-            "Create cards and start battling!",
           ].map((item, i) => (
             <div key={i} className="flex items-start gap-2">
               <span className="flex-shrink-0 w-5 h-5 rounded border border-white/20 flex items-center justify-center text-xs">

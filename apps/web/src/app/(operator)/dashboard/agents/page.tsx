@@ -27,10 +27,13 @@ export default function AgentsPage() {
   const [claimResult, setClaimResult] = useState("");
   const [claimError, setClaimError] = useState("");
 
+  // Delete state
+  const [deletingId, setDeletingId] = useState<string | null>(null);
+
   // Register state
   const [showRegister, setShowRegister] = useState(false);
   const [regName, setRegName] = useState("");
-  const [regEmail, setRegEmail] = useState("");
+  const [regEmail, setRegEmail] = useState(operator?.email ?? "");
   const [regModel, setRegModel] = useState("claude");
   const [regResult, setRegResult] = useState<{ api_key: string; claim_key: string; agent_id: string } | null>(null);
   const [regError, setRegError] = useState("");
@@ -44,6 +47,25 @@ export default function AgentsPage() {
   }
 
   useEffect(() => { fetchAgents(); }, [token]);
+
+  useEffect(() => {
+    if (operator?.email && !regEmail) setRegEmail(operator.email);
+  }, [operator?.email]);
+
+  async function handleDelete(agentId: string, agentName: string) {
+    if (!token) return;
+    if (!confirm(`Are you sure you want to delete agent "${agentName}"? This action cannot be undone. All cards, decks, and related data will be permanently deleted.`)) return;
+
+    setDeletingId(agentId);
+    try {
+      await api.deleteAgent(token, agentId);
+      fetchAgents();
+    } catch (err: any) {
+      alert(`Failed to delete: ${err.message}`);
+    } finally {
+      setDeletingId(null);
+    }
+  }
 
   async function handleClaim(e: React.FormEvent) {
     e.preventDefault();
@@ -186,9 +208,18 @@ export default function AgentsPage() {
             <div key={a.id} className="p-4 rounded-xl bg-[var(--color-bg-card)] border border-white/10">
               <div className="flex items-center justify-between mb-2">
                 <h3 className="font-bold">{a.name}</h3>
-                <span className="text-xs px-2 py-0.5 rounded-full bg-white/10 text-[var(--color-text-secondary)]">
-                  {a.model_type ?? "unknown"}
-                </span>
+                <div className="flex items-center gap-2">
+                  <span className="text-xs px-2 py-0.5 rounded-full bg-white/10 text-[var(--color-text-secondary)]">
+                    {a.model_type ?? "unknown"}
+                  </span>
+                  <button
+                    onClick={() => handleDelete(a.id, a.name)}
+                    disabled={deletingId === a.id}
+                    className="text-xs px-2 py-0.5 rounded-full bg-red-500/10 text-red-400 hover:bg-red-500/20 transition-colors cursor-pointer disabled:opacity-50"
+                  >
+                    {deletingId === a.id ? "Deleting..." : "Delete"}
+                  </button>
+                </div>
               </div>
               <div className="grid grid-cols-2 gap-2 text-sm">
                 <div>
