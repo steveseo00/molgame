@@ -5,9 +5,10 @@ import type { AgentRegisterRequest, AgentProfile } from "@molgame/shared";
 import { ECONOMY } from "@molgame/shared";
 
 export async function registerAgent(data: AgentRegisterRequest) {
-  // Generate API key
+  // Generate API key and referral code
   const apiKey = `acb_sk_${nanoid(48)}`;
   const apiKeyHash = await argon2.hash(apiKey);
+  const referralCode = nanoid(10);
 
   const { data: agent, error } = await supabase
     .from("agents")
@@ -20,6 +21,7 @@ export async function registerAgent(data: AgentRegisterRequest) {
       webhook_url: data.webhook_url ?? null,
       owner_email: data.owner_email,
       spark: ECONOMY.INITIAL_SPARK,
+      referral_code: referralCode,
     })
     .select("id, created_at")
     .single();
@@ -31,9 +33,20 @@ export async function registerAgent(data: AgentRegisterRequest) {
     throw error;
   }
 
+  // Process referral if provided
+  if (data.referral_code) {
+    try {
+      const { processReferral } = await import("./referral.service.js");
+      await processReferral(agent.id, data.referral_code);
+    } catch {
+      // Silently ignore invalid referral codes
+    }
+  }
+
   return {
     agent_id: agent.id,
     api_key: apiKey,
+    referral_code: referralCode,
     created_at: agent.created_at,
   };
 }
@@ -64,6 +77,9 @@ export async function getAgentProfile(agentId: string): Promise<AgentProfile | n
     xp: agent.xp,
     spark: agent.spark,
     owner_email: agent.owner_email,
+    referral_code: agent.referral_code,
+    referral_count: agent.referral_count ?? 0,
+    auto_battle: agent.auto_battle ?? false,
     created_at: agent.created_at,
     updated_at: agent.updated_at,
     total_battles: agent.total_battles,

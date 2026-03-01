@@ -1,6 +1,7 @@
 import { Hono } from "hono";
 import { agentRegisterSchema, agentUpdateSchema } from "@molgame/shared";
 import { authMiddleware, getAgent } from "../middleware/auth.js";
+import { rulesMiddleware } from "../middleware/rules.js";
 import * as agentService from "../services/agent.service.js";
 import { getAgentCards } from "../services/card.service.js";
 import { supabase } from "../db/client.js";
@@ -23,11 +24,7 @@ agentRoutes.post("/register", async (c) => {
   }
 });
 
-// Authenticated routes
-agentRoutes.use("/:id/*", authMiddleware);
-agentRoutes.use("/:id", authMiddleware);
-
-// Get profile
+// Public: Get profile (spectators can view any agent's profile)
 agentRoutes.get("/:id/profile", async (c) => {
   const agentId = c.req.param("id");
   const profile = await agentService.getAgentProfile(agentId);
@@ -37,8 +34,27 @@ agentRoutes.get("/:id/profile", async (c) => {
   return c.json(profile);
 });
 
-// Update profile
-agentRoutes.patch("/:id/profile", async (c) => {
+// Public: Get agent's cards (spectators can view)
+agentRoutes.get("/:id/cards", async (c) => {
+  const agentId = c.req.param("id");
+  const cards = await getAgentCards(agentId);
+  return c.json({ cards });
+});
+
+// Public: Get deck (spectators can view)
+agentRoutes.get("/:id/deck", async (c) => {
+  const agentId = c.req.param("id");
+  const { data: deck } = await supabase
+    .from("decks")
+    .select("card_id, slot")
+    .eq("agent_id", agentId)
+    .order("slot");
+
+  return c.json({ deck: deck ?? [] });
+});
+
+// Authenticated: Update profile
+agentRoutes.patch("/:id/profile", authMiddleware, async (c) => {
   const agentId = c.req.param("id");
   const auth = getAgent(c);
 
@@ -56,27 +72,8 @@ agentRoutes.patch("/:id/profile", async (c) => {
   return c.json({ success: true });
 });
 
-// Get agent's cards
-agentRoutes.get("/:id/cards", async (c) => {
-  const agentId = c.req.param("id");
-  const cards = await getAgentCards(agentId);
-  return c.json({ cards });
-});
-
-// Get deck
-agentRoutes.get("/:id/deck", async (c) => {
-  const agentId = c.req.param("id");
-  const { data: deck } = await supabase
-    .from("decks")
-    .select("card_id, slot")
-    .eq("agent_id", agentId)
-    .order("slot");
-
-  return c.json({ deck: deck ?? [] });
-});
-
-// Set deck
-agentRoutes.put("/:id/deck", async (c) => {
+// Authenticated + Rules: Set deck
+agentRoutes.put("/:id/deck", authMiddleware, rulesMiddleware, async (c) => {
   const agentId = c.req.param("id");
   const auth = getAgent(c);
 
@@ -117,4 +114,16 @@ agentRoutes.put("/:id/deck", async (c) => {
   await supabase.from("decks").insert(deckEntries);
 
   return c.json({ success: true, deck_size: cardIds.length });
+});
+
+// Authenticated: Toggle auto-battle
+agentRoutes.patch("/:id/auto-battle", authMiddleware, async (c) => {
+  const agentId = c.req.param("id");
+  const auth = getAgent(c);
+  if (auth.agent_id !== agentId) {
+    return c.json({ error: { code: 403, message: "Cannot modify another agent" } }, 403);
+  }
+  const { enabled } = await c.req.json();
+  await supabase.from("agents").update({ auto_battle: !!enabled }).eq("id", agentId);
+  return c.json({ success: true, auto_battle: !!enabled });
 });

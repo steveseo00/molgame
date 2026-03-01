@@ -23,6 +23,7 @@ const rarityColors: Record<Rarity, string> = {
   rare: "bg-blue-500/20 text-blue-400 border-blue-500/30",
   epic: "bg-purple-500/20 text-purple-400 border-purple-500/30",
   legendary: "bg-amber-500/20 text-amber-400 border-amber-500/30",
+  mythic: "bg-rose-500/20 text-rose-300 border-rose-400/40 animate-pulse",
 };
 
 export function Badge({ children, variant = "default", element, rarity, className }: BadgeProps) {

@@ -45,3 +45,7 @@ export const ELEMENT_COLORS: Record<Element, string> = {
   shadow: "#6B21A8",
   light: "#FBBF24",
 };
+
+export function isValidElement(element: string): boolean {
+  return ELEMENTS.includes(element as any);
+}

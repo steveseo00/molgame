@@ -1,5 +1,7 @@
 import { supabase } from "../db/client.js";
 import { ELO, ECONOMY } from "@molgame/shared";
+import { checkBattleBadges } from "./badge.service.js";
+import { getSparkMultiplier } from "./event.service.js";
 
 export function calculateEloChange(
   winnerElo: number,
@@ -23,8 +25,9 @@ export async function processBattleRewards(
   isDraw: boolean,
 ) {
   if (isDraw) {
-    if (winnerId) await addSpark(winnerId, ECONOMY.BATTLE_DRAW);
-    if (loserId) await addSpark(loserId, ECONOMY.BATTLE_DRAW);
+    const drawReward = ECONOMY.BATTLE_DRAW * getSparkMultiplier();
+    if (winnerId) await addSpark(winnerId, drawReward);
+    if (loserId) await addSpark(loserId, drawReward);
     return;
   }
 
@@ -48,12 +51,13 @@ export async function processBattleRewards(
   // Calculate ELO changes
   const { winnerChange, loserChange } = calculateEloChange(winner.elo_rating, loser.elo_rating);
 
-  // Calculate Spark rewards
-  let sparkRewardWinner = ECONOMY.BATTLE_WIN;
+  // Calculate Spark rewards with event multiplier
+  const sparkMultiplier = getSparkMultiplier();
+  let sparkRewardWinner = ECONOMY.BATTLE_WIN * sparkMultiplier;
   const newStreak = winner.win_streak + 1;
 
-  if (newStreak >= 5) sparkRewardWinner += ECONOMY.WIN_STREAK_5;
-  else if (newStreak >= 3) sparkRewardWinner += ECONOMY.WIN_STREAK_3;
+  if (newStreak >= 5) sparkRewardWinner += ECONOMY.WIN_STREAK_5 * sparkMultiplier;
+  else if (newStreak >= 3) sparkRewardWinner += ECONOMY.WIN_STREAK_3 * sparkMultiplier;
 
   // Update winner
   await supabase
@@ -78,14 +82,19 @@ export async function processBattleRewards(
     })
     .eq("id", loserId);
 
-  await addSpark(loserId, ECONOMY.BATTLE_LOSS);
+  const sparkRewardLoser = ECONOMY.BATTLE_LOSS * sparkMultiplier;
+  await addSpark(loserId, sparkRewardLoser);
+
+  // Check badges for both participants
+  await checkBattleBadges(winnerId);
+  await checkBattleBadges(loserId);
 
   // Update battle record
   return {
     elo_change_winner: winnerChange,
     elo_change_loser: loserChange,
     spark_reward_winner: sparkRewardWinner,
-    spark_reward_loser: ECONOMY.BATTLE_LOSS,
+    spark_reward_loser: sparkRewardLoser,
   };
 }
 

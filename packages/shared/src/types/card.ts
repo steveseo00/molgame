@@ -1,6 +1,6 @@
 export type Element = "fire" | "water" | "lightning" | "nature" | "shadow" | "light";
 
-export type Rarity = "common" | "rare" | "epic" | "legendary";
+export type Rarity = "common" | "rare" | "epic" | "legendary" | "mythic";
 
 export type SkillType = "attack" | "buff" | "debuff" | "heal" | "special";
 
@@ -44,6 +44,9 @@ export interface Card {
   battle_count: number;
   win_count: number;
   is_tradeable: boolean;
+  season_id?: number;
+  boost_remaining?: number;
+  veteran_bonus?: boolean;
   created_at: string;
 }
 

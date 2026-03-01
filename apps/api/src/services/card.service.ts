@@ -1,13 +1,88 @@
 import { supabase } from "../db/client.js";
 import { nanoid } from "nanoid";
-import type { Card, CardSkill, Element } from "@molgame/shared";
-import { ECONOMY } from "@molgame/shared";
+import type { Card, CardSkill, Element, Rarity } from "@molgame/shared";
+import { ECONOMY, RARITY_CONFIG } from "@molgame/shared";
 import { rollRarity, generateStats, assignSkills } from "../engine/card-generator.js";
 import { inferElementFromKeywords, getRandomElement } from "../engine/element-system.js";
 import { generateCardPrompts } from "./image.service.js";
 import { updateSpark, getAgentSpark } from "./agent.service.js";
+import { checkCardBadges, checkRarityBadge } from "./badge.service.js";
+import { getLegendaryRainProbability } from "./event.service.js";
 import { AppError } from "../middleware/error-handler.js";
 import { ERROR_CODES } from "@molgame/shared";
+import { issueWarning } from "./penalty.service.js";
+
+// Content filter for card concepts (Rule R5)
+const HARMFUL_CONTENT_PATTERNS = [
+  /\b(kill|murder|assassinate|suicide|genocide)\b/i,
+  /\b(terrorist|terrorism|bomb|explosive)\b/i,
+  /\b(racial|racist|nazi|white\s*supremac)/i,
+  /\b(child\s*(abuse|porn|exploitation))\b/i,
+  /\b(drug\s*(deal|traffic|cartel))\b/i,
+];
+
+function checkContentFilter(concept: string, agentId: string): boolean {
+  for (const pattern of HARMFUL_CONTENT_PATTERNS) {
+    if (pattern.test(concept)) {
+      // Issue warning asynchronously (don't block card creation rejection)
+      issueWarning(agentId, "R5", `Harmful content in card concept: "${concept.slice(0, 100)}"`).catch(() => {});
+      return false;
+    }
+  }
+  return true;
+}
+
+// --- Secret Card Recipes ---
+// Hidden concept keywords that boost rarity chances. Community discovers and shares these.
+const SECRET_RECIPES: Array<{
+  pattern: RegExp;
+  effect: { mythicBoost?: number; legendaryBoost?: number; guaranteedElement?: Element };
+}> = [
+  // Primordial concepts → 10% Mythic chance
+  { pattern: /primordial\s+(shadow|flame|storm|void)/i, effect: { mythicBoost: 0.10 } },
+  { pattern: /ancient\s+(guardian|titan|behemoth)/i, effect: { mythicBoost: 0.05 } },
+  { pattern: /celestial\s+(dragon|phoenix|serpent)/i, effect: { mythicBoost: 0.08 } },
+  // AI model name concepts → guaranteed legendary
+  { pattern: /\b(claude|anthropic)\s+(warrior|knight|mage|phoenix)/i, effect: { legendaryBoost: 1.0 } },
+  { pattern: /\b(gpt|openai)\s+(warrior|knight|mage|phoenix)/i, effect: { legendaryBoost: 1.0 } },
+  { pattern: /\b(gemini|deepmind)\s+(warrior|knight|mage|phoenix)/i, effect: { legendaryBoost: 1.0 } },
+  // Elemental purity → guaranteed element
+  { pattern: /pure\s+fire|inferno\s+lord/i, effect: { guaranteedElement: "fire" } },
+  { pattern: /pure\s+water|ocean\s+lord/i, effect: { guaranteedElement: "water" } },
+  { pattern: /pure\s+lightning|thunder\s+lord/i, effect: { guaranteedElement: "lightning" } },
+  { pattern: /pure\s+nature|forest\s+lord/i, effect: { guaranteedElement: "nature" } },
+  { pattern: /pure\s+shadow|void\s+lord/i, effect: { guaranteedElement: "shadow" } },
+  { pattern: /pure\s+light|radiant\s+lord/i, effect: { guaranteedElement: "light" } },
+  // Easter eggs
+  { pattern: /\bmolgame\b/i, effect: { mythicBoost: 0.15 } },
+  { pattern: /\bworld\s+eater\b/i, effect: { mythicBoost: 0.05, guaranteedElement: "shadow" } },
+];
+
+function applySecretRecipes(concept: string): {
+  mythicOverride?: number;
+  legendaryOverride?: number;
+  elementOverride?: Element;
+} {
+  let mythicOverride: number | undefined;
+  let legendaryOverride: number | undefined;
+  let elementOverride: Element | undefined;
+
+  for (const recipe of SECRET_RECIPES) {
+    if (recipe.pattern.test(concept)) {
+      if (recipe.effect.mythicBoost) {
+        mythicOverride = Math.max(mythicOverride ?? 0, recipe.effect.mythicBoost);
+      }
+      if (recipe.effect.legendaryBoost) {
+        legendaryOverride = Math.max(legendaryOverride ?? 0, recipe.effect.legendaryBoost);
+      }
+      if (recipe.effect.guaranteedElement) {
+        elementOverride = recipe.effect.guaranteedElement;
+      }
+    }
+  }
+
+  return { mythicOverride, legendaryOverride, elementOverride };
+}
 
 export async function initiateCardCreation(agentId: string, concept?: string) {
   // Check daily limit and cooldown
@@ -23,6 +98,11 @@ export async function initiateCardCreation(agentId: string, concept?: string) {
     throw new AppError(400, ERROR_CODES.INSUFFICIENT_SPARK, "Insufficient Spark");
   }
 
+  // Content filter (Rule R5)
+  if (concept && !checkContentFilter(concept, agentId)) {
+    throw new AppError(400, 1010, "Card concept contains prohibited content. A warning has been issued.");
+  }
+
   if (agent.cards_created_today >= ECONOMY.CARD_CREATION_DAILY_LIMIT) {
     throw new AppError(400, 1004, "Daily card creation limit reached");
   }
@@ -34,7 +114,7 @@ export async function initiateCardCreation(agentId: string, concept?: string) {
     }
   }
 
-  const sessionId = `cs_${nanoid(16)}`;
+  const sessionId = crypto.randomUUID();
   const prompts = generateCardPrompts(concept);
 
   const { error } = await supabase.from("card_sessions").insert({
@@ -108,14 +188,27 @@ export async function generateCard(
     suggestedElement = suggestedElement ?? prompts[0].suggested_element;
   }
 
+  // Apply secret card recipes if concept has hidden keywords
+  const fullText = (session.concept ?? "") + " " + selectedPrompt + " " + cardName;
+  const recipes = applySecretRecipes(fullText);
+
+  // Recipe can override element
+  if (recipes.elementOverride) {
+    suggestedElement = recipes.elementOverride;
+  }
+
   // Determine element
   const element: Element =
     suggestedElement ??
     inferElementFromKeywords(selectedPrompt + " " + cardName) ??
     getRandomElement();
 
-  // Roll rarity and generate stats
-  const rarity = rollRarity();
+  // Roll rarity with event + recipe overrides
+  const eventLegendary = getLegendaryRainProbability() || undefined;
+  const rarity = rollRarity({
+    legendary: recipes.legendaryOverride ?? eventLegendary,
+    mythic: recipes.mythicOverride,
+  });
   const stats = generateStats(rarity);
   const skills = assignSkills(element, rarity);
 
@@ -182,6 +275,10 @@ export async function generateCard(
       cards_created: (agentData?.cards_created ?? 0) + 1,
     })
     .eq("id", agentId);
+
+  // Check badges after card creation
+  await checkRarityBadge(agentId, rarity);
+  await checkCardBadges(agentId);
 
   const fullCard = await getCardById(card.id);
 
@@ -276,5 +373,150 @@ export async function getCardGallery(params: {
   return {
     cards: cards.filter((c): c is Card => c !== null),
     total: count ?? 0,
+  };
+}
+
+// --- Spark Sink: Card Evolution ---
+// Combine 3 same-rarity + same-element cards → next rarity tier
+const RARITY_UPGRADE: Record<string, Rarity> = {
+  common: "rare",
+  rare: "epic",
+  epic: "legendary",
+  legendary: "mythic",
+};
+
+export async function evolveCard(agentId: string, cardIds: string[]) {
+  if (cardIds.length !== 3) {
+    throw new AppError(400, 1020, "Evolution requires exactly 3 cards");
+  }
+
+  // Fetch all 3 cards
+  const cards = await Promise.all(cardIds.map((id) => getCardById(id)));
+  for (let i = 0; i < cards.length; i++) {
+    if (!cards[i]) throw new AppError(404, 1021, `Card ${cardIds[i]} not found`);
+  }
+
+  const validCards = cards as Card[];
+
+  // Verify ownership
+  for (const card of validCards) {
+    if (card.owner_id !== agentId) {
+      throw new AppError(403, 1022, `Card ${card.id} not owned by you`);
+    }
+  }
+
+  // Verify same rarity and element
+  const rarity = validCards[0].rarity;
+  const element = validCards[0].element;
+  if (rarity === "mythic") {
+    throw new AppError(400, 1023, "Mythic cards cannot be evolved further");
+  }
+  for (const card of validCards) {
+    if (card.rarity !== rarity) {
+      throw new AppError(400, 1024, "All cards must have the same rarity");
+    }
+    if (card.element !== element) {
+      throw new AppError(400, 1025, "All cards must have the same element");
+    }
+  }
+
+  // Deduct Spark
+  const sparkRemaining = await updateSpark(agentId, -ECONOMY.CARD_EVOLUTION_COST);
+
+  // Delete the 3 source cards
+  for (const cardId of cardIds) {
+    await supabase.from("card_skills").delete().eq("card_id", cardId);
+    await supabase.from("cards").delete().eq("id", cardId);
+  }
+
+  // Create evolved card at next rarity
+  const newRarity = RARITY_UPGRADE[rarity];
+  const stats = generateStats(newRarity);
+  const skills = assignSkills(element, newRarity);
+  const evolvedName = `Evolved ${validCards[0].name}`;
+  const imageUrl = `https://placehold.co/512x512/1a1a2e/e94560?text=${encodeURIComponent(evolvedName)}`;
+
+  const { data: newCard, error } = await supabase
+    .from("cards")
+    .insert({
+      name: evolvedName,
+      description: `Evolved from 3 ${rarity} ${element} cards`,
+      image_url: imageUrl,
+      image_prompt: validCards[0].image_prompt,
+      creator_id: agentId,
+      owner_id: agentId,
+      element,
+      rarity: newRarity,
+      hp: stats.hp,
+      atk: stats.atk,
+      def: stats.def,
+      spd: stats.spd,
+    })
+    .select()
+    .single();
+
+  if (error) throw error;
+
+  if (skills.length > 0) {
+    await supabase.from("card_skills").insert(
+      skills.map((s) => ({ card_id: newCard.id, ...s })),
+    );
+  }
+
+  await checkRarityBadge(agentId, newRarity);
+
+  const fullCard = await getCardById(newCard.id);
+  return { card: fullCard, spark_spent: ECONOMY.CARD_EVOLUTION_COST, spark_remaining: sparkRemaining };
+}
+
+// --- Spark Sink: Card Reforging ---
+// Re-roll one stat within rarity range
+export async function reforgeCard(agentId: string, cardId: string, stat: "hp" | "atk" | "def" | "spd") {
+  const card = await getCardById(cardId);
+  if (!card) throw new AppError(404, 1030, "Card not found");
+  if (card.owner_id !== agentId) throw new AppError(403, 1031, "Card not owned by you");
+
+  const sparkRemaining = await updateSpark(agentId, -ECONOMY.CARD_REFORGE_COST);
+
+  const config = RARITY_CONFIG[card.rarity];
+  const range = config[stat];
+  const randomInt = (min: number, max: number) => Math.floor(Math.random() * (max - min + 1)) + min;
+  const newValue = randomInt(range[0], range[1]);
+
+  await supabase
+    .from("cards")
+    .update({ [stat]: newValue })
+    .eq("id", cardId);
+
+  return {
+    card_id: cardId,
+    stat,
+    old_value: card.stats[stat],
+    new_value: newValue,
+    spark_spent: ECONOMY.CARD_REFORGE_COST,
+    spark_remaining: sparkRemaining,
+  };
+}
+
+// --- Spark Sink: Card Boosting ---
+// +10% stats for next 5 battles
+export async function boostCard(agentId: string, cardId: string) {
+  const card = await getCardById(cardId);
+  if (!card) throw new AppError(404, 1040, "Card not found");
+  if (card.owner_id !== agentId) throw new AppError(403, 1041, "Card not owned by you");
+
+  const sparkRemaining = await updateSpark(agentId, -ECONOMY.CARD_BOOST_COST);
+
+  await supabase
+    .from("cards")
+    .update({ boost_remaining: ECONOMY.CARD_BOOST_BATTLES })
+    .eq("id", cardId);
+
+  return {
+    card_id: cardId,
+    boost_remaining: ECONOMY.CARD_BOOST_BATTLES,
+    boost_multiplier: ECONOMY.CARD_BOOST_MULTIPLIER,
+    spark_spent: ECONOMY.CARD_BOOST_COST,
+    spark_remaining: sparkRemaining,
   };
 }

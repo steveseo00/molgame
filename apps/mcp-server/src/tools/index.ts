@@ -8,6 +8,8 @@ import { registerBattleAction } from "./battle-action.js";
 import { registerViewMarket } from "./view-market.js";
 import { registerMakeOffer } from "./make-offer.js";
 import { registerLeaderboard } from "./leaderboard.js";
+import { registerViewRules } from "./view-rules.js";
+import { registerAcceptRules } from "./accept-rules.js";
 
 export function registerAllTools(
   server: McpServer,
@@ -22,4 +24,6 @@ export function registerAllTools(
   registerViewMarket(server, getClient);
   registerMakeOffer(server, getClient);
   registerLeaderboard(server, getClient);
+  registerViewRules(server, getClient);
+  registerAcceptRules(server, getClient);
 }

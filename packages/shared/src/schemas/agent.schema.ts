@@ -7,6 +7,7 @@ export const agentRegisterSchema = z.object({
   avatar_url: z.string().url().optional(),
   webhook_url: z.string().url().optional(),
   owner_email: z.string().email(),
+  referral_code: z.string().max(20).optional(),
 });
 
 export const agentUpdateSchema = z.object({

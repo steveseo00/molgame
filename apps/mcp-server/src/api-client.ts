@@ -112,4 +112,17 @@ export class GameApiClient {
     const path = type === "cards" ? "/api/v1/leaderboard/cards" : "/api/v1/leaderboard";
     return this.request<any>(`${path}?limit=${limit}`);
   }
+
+  // Rules
+  getRules() {
+    return this.request<any>(`/api/v1/rules`);
+  }
+
+  acceptRules() {
+    return this.request<any>(`/api/v1/rules/accept`, { method: "POST" });
+  }
+
+  getRulesStatus() {
+    return this.request<any>(`/api/v1/rules/status`);
+  }
 }

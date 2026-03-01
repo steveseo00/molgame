@@ -4,19 +4,20 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "tsx watch src/index.ts",
+    "dev": "tsx watch --env-file=../../.env src/index.ts",
     "build": "tsc",
     "start": "node dist/index.js"
   },
   "dependencies": {
-    "@molgame/shared": "workspace:*",
-    "hono": "^4.7.0",
     "@hono/node-server": "^1.14.0",
+    "@molgame/shared": "workspace:*",
     "@supabase/supabase-js": "^2.49.0",
+    "argon2": "^0.41.0",
+    "dotenv": "^17.3.1",
+    "hono": "^4.7.0",
+    "nanoid": "^5.1.0",
     "openai": "^4.85.0",
     "ws": "^8.18.0",
-    "nanoid": "^5.1.0",
-    "argon2": "^0.41.0",
     "zod": "^3.24.0"
   },
   "devDependencies": {

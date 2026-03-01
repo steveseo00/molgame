@@ -1,6 +1,7 @@
 import { Hono } from "hono";
 import { battleQueueSchema, battleActionSchema, battleChallengeSchema } from "@molgame/shared";
 import { authMiddleware, getAgent } from "../middleware/auth.js";
+import { rulesMiddleware } from "../middleware/rules.js";
 import * as battleService from "../services/battle.service.js";
 import * as matchmaking from "../services/matchmaking.service.js";
 import * as economyService from "../services/economy.service.js";
@@ -8,11 +9,34 @@ import { supabase } from "../db/client.js";
 
 export const battleRoutes = new Hono();
 
-// All battle routes require auth
-battleRoutes.use("*", authMiddleware);
+// Public: Get battle state (for spectators)
+battleRoutes.get("/:id", async (c) => {
+  const battleId = c.req.param("id");
 
-// Join matchmaking queue
-battleRoutes.post("/queue", async (c) => {
+  // Check active battles first
+  const state = battleService.getBattleState(battleId);
+  if (state) return c.json(state);
+
+  // Fall back to DB
+  const replay = await battleService.getBattleReplay(battleId);
+  if (!replay) {
+    return c.json({ error: { code: 404, message: "Battle not found" } }, 404);
+  }
+  return c.json(replay);
+});
+
+// Public: Get replay (for spectators)
+battleRoutes.get("/:id/replay", async (c) => {
+  const battleId = c.req.param("id");
+  const replay = await battleService.getBattleReplay(battleId);
+  if (!replay) {
+    return c.json({ error: { code: 404, message: "Battle not found" } }, 404);
+  }
+  return c.json(replay);
+});
+
+// Authenticated + Rules: Join matchmaking queue
+battleRoutes.post("/queue", authMiddleware, rulesMiddleware, async (c) => {
   const auth = getAgent(c);
   const body = await c.req.json();
   const parsed = battleQueueSchema.safeParse(body);
@@ -33,7 +57,7 @@ battleRoutes.post("/queue", async (c) => {
   }
 
   try {
-    const result = matchmaking.joinQueue(
+    const result = await matchmaking.joinQueue(
       auth.agent_id,
       auth.agent_name,
       agent.elo_rating,
@@ -46,31 +70,15 @@ battleRoutes.post("/queue", async (c) => {
   }
 });
 
-// Leave queue
-battleRoutes.delete("/queue", async (c) => {
+// Authenticated: Leave queue
+battleRoutes.delete("/queue", authMiddleware, async (c) => {
   const auth = getAgent(c);
   const left = matchmaking.leaveQueue(auth.agent_id);
   return c.json({ left });
 });
 
-// Get battle state
-battleRoutes.get("/:id", async (c) => {
-  const battleId = c.req.param("id");
-
-  // Check active battles first
-  const state = battleService.getBattleState(battleId);
-  if (state) return c.json(state);
-
-  // Fall back to DB
-  const replay = await battleService.getBattleReplay(battleId);
-  if (!replay) {
-    return c.json({ error: { code: 404, message: "Battle not found" } }, 404);
-  }
-  return c.json(replay);
-});
-
-// Submit battle action
-battleRoutes.post("/:id/action", async (c) => {
+// Authenticated + Rules: Submit battle action
+battleRoutes.post("/:id/action", authMiddleware, rulesMiddleware, async (c) => {
   const auth = getAgent(c);
   const battleId = c.req.param("id");
   const body = await c.req.json();
@@ -107,18 +115,8 @@ battleRoutes.post("/:id/action", async (c) => {
   }
 });
 
-// Get replay
-battleRoutes.get("/:id/replay", async (c) => {
-  const battleId = c.req.param("id");
-  const replay = await battleService.getBattleReplay(battleId);
-  if (!replay) {
-    return c.json({ error: { code: 404, message: "Battle not found" } }, 404);
-  }
-  return c.json(replay);
-});
-
-// Direct challenge
-battleRoutes.post("/challenge", async (c) => {
+// Authenticated + Rules: Direct challenge
+battleRoutes.post("/challenge", authMiddleware, rulesMiddleware, async (c) => {
   const auth = getAgent(c);
   const body = await c.req.json();
   const parsed = battleChallengeSchema.safeParse(body);

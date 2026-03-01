@@ -9,6 +9,11 @@ import { battleRoutes } from "./routes/battles.js";
 import { marketRoutes } from "./routes/market.js";
 import { tournamentRoutes } from "./routes/tournaments.js";
 import { leaderboardRoutes } from "./routes/leaderboard.js";
+import { statsRoutes } from "./routes/stats.js";
+import { operatorRoutes } from "./routes/operators.js";
+import { seasonRoutes } from "./routes/seasons.js";
+import { rulesRoutes } from "./routes/rules.js";
+import { spectatorRoutes } from "./routes/spectators.js";
 
 const app = new Hono();
 
@@ -27,6 +32,11 @@ app.route("/api/v1/battle", battleRoutes);
 app.route("/api/v1/market", marketRoutes);
 app.route("/api/v1/tournament", tournamentRoutes);
 app.route("/api/v1/leaderboard", leaderboardRoutes);
+app.route("/api/v1/stats", statsRoutes);
+app.route("/api/v1/operators", operatorRoutes);
+app.route("/api/v1/seasons", seasonRoutes);
+app.route("/api/v1/rules", rulesRoutes);
+app.route("/api/v1/spectators", spectatorRoutes);
 
 // Error handler
 app.onError(errorHandler);

@@ -18,6 +18,7 @@ const rarityBorders: Record<string, string> = {
   rare: "border-blue-500/60 glow-rare",
   epic: "border-purple-500/60 glow-epic",
   legendary: "border-amber-400/60 glow-legendary",
+  mythic: "border-rose-400/80 glow-mythic animate-pulse",
 };
 
 const elementGradients: Record<Element, string> = {

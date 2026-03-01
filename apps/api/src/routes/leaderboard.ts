@@ -1,5 +1,6 @@
 import { Hono } from "hono";
 import { supabase } from "../db/client.js";
+import { getOperatorLeaderboard } from "../services/operator.service.js";
 
 export const leaderboardRoutes = new Hono();
 
@@ -60,4 +61,11 @@ leaderboardRoutes.get("/creators", async (c) => {
   }));
 
   return c.json({ leaderboard: creators });
+});
+
+// Operator rankings
+leaderboardRoutes.get("/operators", async (c) => {
+  const limit = parseInt(c.req.query("limit") || "20");
+  const leaderboard = await getOperatorLeaderboard(limit);
+  return c.json({ leaderboard });
 });

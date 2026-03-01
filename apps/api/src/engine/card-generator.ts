@@ -6,11 +6,18 @@ function randomInt(min: number, max: number): number {
   return Math.floor(Math.random() * (max - min + 1)) + min;
 }
 
-export function rollRarity(): Rarity {
+export function rollRarity(overrides?: { legendary?: number; mythic?: number }): Rarity {
   const roll = Math.random();
   let cumulative = 0;
   for (const rarity of RARITY_ORDER) {
-    cumulative += RARITY_CONFIG[rarity].probability;
+    let probability = RARITY_CONFIG[rarity].probability;
+    if (overrides?.legendary && rarity === "legendary") {
+      probability = overrides.legendary;
+    }
+    if (overrides?.mythic && rarity === "mythic") {
+      probability = overrides.mythic;
+    }
+    cumulative += probability;
     if (roll < cumulative) return rarity;
   }
   return "common";

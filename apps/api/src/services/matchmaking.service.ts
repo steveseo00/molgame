@@ -1,6 +1,5 @@
 import { supabase } from "../db/client.js";
 import { ELO } from "@molgame/shared";
-import { nanoid } from "nanoid";
 import { createBattle } from "./battle.service.js";
 
 interface QueueEntry {
@@ -81,8 +80,8 @@ async function tryMatch(entry: QueueEntry) {
       queuedAgents.delete(entry.agent_id);
       queuedAgents.delete(candidate.agent_id);
 
-      // Create battle
-      const battleId = nanoid(16);
+      // Create battle (UUID required by battles table)
+      const battleId = crypto.randomUUID();
       const battle = await createBattle(
         battleId,
         entry.mode,

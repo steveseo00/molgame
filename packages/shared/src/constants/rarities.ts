@@ -47,13 +47,23 @@ export const RARITY_CONFIG: Record<Rarity, RarityConfig> = {
     skill_count: [2, 3],
     creation_cost: 10,
   },
+  mythic: {
+    probability: 0.001,
+    hp: [250, 400],
+    atk: [80, 130],
+    def: [80, 130],
+    spd: [9, 12],
+    skill_count: [3, 4],
+    creation_cost: 10,
+  },
 };
 
-export const RARITY_ORDER: Rarity[] = ["common", "rare", "epic", "legendary"];
+export const RARITY_ORDER: Rarity[] = ["common", "rare", "epic", "legendary", "mythic"];
 
 export const RARITY_COLORS: Record<Rarity, string> = {
   common: "#9CA3AF",
   rare: "#3B82F6",
   epic: "#A855F7",
   legendary: "#F59E0B",
+  mythic: "linear-gradient(90deg, #FF0000, #FF7F00, #FFFF00, #00FF00, #0000FF, #8B00FF)",
 };

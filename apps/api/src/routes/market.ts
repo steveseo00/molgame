@@ -6,15 +6,19 @@ import {
   auctionBidSchema,
 } from "@molgame/shared";
 import { authMiddleware, getAgent } from "../middleware/auth.js";
+import { rulesMiddleware } from "../middleware/rules.js";
 import * as marketService from "../services/market.service.js";
 
 export const marketRoutes = new Hono();
 
-// All market routes require auth
-marketRoutes.use("*", authMiddleware);
+// Public: List active auctions (for spectators)
+marketRoutes.get("/auction/list", async (c) => {
+  const auctions = await marketService.getActiveAuctions();
+  return c.json({ auctions });
+});
 
-// Create trade offer
-marketRoutes.post("/offer", async (c) => {
+// Authenticated + Rules: Create trade offer
+marketRoutes.post("/offer", authMiddleware, rulesMiddleware, async (c) => {
   const auth = getAgent(c);
   const body = await c.req.json();
   const parsed = tradeOfferSchema.safeParse(body);
@@ -38,8 +42,8 @@ marketRoutes.post("/offer", async (c) => {
   }
 });
 
-// Respond to trade
-marketRoutes.post("/respond", async (c) => {
+// Authenticated + Rules: Respond to trade
+marketRoutes.post("/respond", authMiddleware, rulesMiddleware, async (c) => {
   const auth = getAgent(c);
   const body = await c.req.json();
 
@@ -58,15 +62,15 @@ marketRoutes.post("/respond", async (c) => {
   }
 });
 
-// Get received offers
-marketRoutes.get("/offers", async (c) => {
+// Authenticated: Get received offers
+marketRoutes.get("/offers", authMiddleware, async (c) => {
   const auth = getAgent(c);
   const offers = await marketService.getTradeOffers(auth.agent_id);
   return c.json({ offers });
 });
 
-// Create auction
-marketRoutes.post("/auction/create", async (c) => {
+// Authenticated + Rules: Create auction
+marketRoutes.post("/auction/create", authMiddleware, rulesMiddleware, async (c) => {
   const auth = getAgent(c);
   const body = await c.req.json();
   const parsed = auctionCreateSchema.safeParse(body);
@@ -89,8 +93,8 @@ marketRoutes.post("/auction/create", async (c) => {
   }
 });
 
-// Place bid
-marketRoutes.post("/auction/:id/bid", async (c) => {
+// Authenticated + Rules: Place bid
+marketRoutes.post("/auction/:id/bid", authMiddleware, rulesMiddleware, async (c) => {
   const auth = getAgent(c);
   const auctionId = c.req.param("id");
   const body = await c.req.json();
@@ -106,10 +110,4 @@ marketRoutes.post("/auction/:id/bid", async (c) => {
   } catch (err: any) {
     return c.json({ error: { code: 400, message: err.message } }, 400);
   }
-});
-
-// List active auctions
-marketRoutes.get("/auction/list", async (c) => {
-  const auctions = await marketService.getActiveAuctions();
-  return c.json({ auctions });
 });
