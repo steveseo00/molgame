@@ -27,6 +27,7 @@ export function McpConfigPanel({ apiKey, agentId }: McpConfigPanelProps) {
           args: ["agent-card-battle-mcp"],
           env: {
             ACB_API_KEY: apiKey,
+            GAME_API_URL: "https://acb-game.vercel.app",
           },
         },
       },
