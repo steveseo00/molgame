@@ -1,19 +1,69 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useMemo, useCallback } from "react";
 import type { BattleState, BattleEvent } from "@molgame/shared";
 import { ELEMENT_ICONS } from "@molgame/shared";
 import { cn } from "@/lib/utils";
 import { ProgressBar } from "@/components/ui/ProgressBar";
 import { Badge } from "@/components/ui/Badge";
+import Link from "next/link";
 
 interface BattleViewerProps {
   battleId: string;
   initialState: BattleState | null;
 }
 
-export function BattleViewer({ battleId, initialState }: BattleViewerProps) {
+export function BattleViewer({ initialState }: BattleViewerProps) {
   const [state] = useState<BattleState | null>(initialState);
+
+  // Group battle_log events by turn
+  const turnGroups = useMemo(() => {
+    if (!state) return [];
+    const groups: { turn: number; events: BattleEvent[] }[] = [];
+    let current: { turn: number; events: BattleEvent[] } | null = null;
+
+    for (const event of state.battle_log) {
+      if (event.type === "turn_start" || (current === null && event.type === "battle_start")) {
+        if (current) groups.push(current);
+        current = { turn: event.turn, events: [event] };
+      } else if (current) {
+        current.events.push(event);
+      } else {
+        // Events before any turn_start (like battle_start)
+        current = { turn: event.turn, events: [event] };
+      }
+    }
+    if (current) groups.push(current);
+    return groups;
+  }, [state]);
+
+  const maxTurn = turnGroups.length;
+  const [visibleTurn, setVisibleTurn] = useState(maxTurn); // show all by default
+
+  const visibleEvents = useMemo(() => {
+    return turnGroups.slice(0, visibleTurn).flatMap((g) => g.events);
+  }, [turnGroups, visibleTurn]);
+
+  // Find the card state at a given point by replaying events
+  // For simplicity, we reconstruct from the final state + events
+  // We show the final state cards but only display log up to visibleTurn
+  const currentTurnLabel = visibleTurn === 0 ? "Start" : `Turn ${turnGroups[visibleTurn - 1]?.turn ?? 0}`;
+
+  const handlePrev = useCallback(() => {
+    setVisibleTurn((t) => Math.max(0, t - 1));
+  }, []);
+
+  const handleNext = useCallback(() => {
+    setVisibleTurn((t) => Math.min(maxTurn, t + 1));
+  }, [maxTurn]);
+
+  const handleFirst = useCallback(() => {
+    setVisibleTurn(0);
+  }, []);
+
+  const handleLast = useCallback(() => {
+    setVisibleTurn(maxTurn);
+  }, [maxTurn]);
 
   if (!state) {
     return (
@@ -25,9 +75,18 @@ export function BattleViewer({ battleId, initialState }: BattleViewerProps) {
 
   const cardA = state.agent_a.cards[state.agent_a.active_card_index];
   const cardB = state.agent_b.cards[state.agent_b.active_card_index];
+  const isFinished = state.status === "finished";
 
   return (
     <div className="max-w-4xl mx-auto">
+      {/* Back link */}
+      <Link
+        href="/battles"
+        className="inline-block mb-4 text-sm text-[var(--color-text-secondary)] hover:text-white transition-colors"
+      >
+        {"<-"} Back to Battles
+      </Link>
+
       {/* Battle header */}
       <div className="flex items-center justify-between mb-6">
         <div className="flex items-center gap-2">
@@ -35,12 +94,19 @@ export function BattleViewer({ battleId, initialState }: BattleViewerProps) {
             {state.status === "active" ? "LIVE" : state.status.toUpperCase()}
           </Badge>
           <span className="text-sm text-[var(--color-text-secondary)]">
-            Turn {state.turn}
+            {state.turn} turns | {state.mode}
           </span>
         </div>
-        <span className="text-sm text-[var(--color-text-secondary)]">
-          {state.mode}
-        </span>
+        {state.started_at && (
+          <span className="text-xs text-[var(--color-text-secondary)]">
+            {new Date(state.started_at).toLocaleString(undefined, {
+              month: "short",
+              day: "numeric",
+              hour: "2-digit",
+              minute: "2-digit",
+            })}
+          </span>
+        )}
       </div>
 
       {/* Arena */}
@@ -90,9 +156,10 @@ export function BattleViewer({ battleId, initialState }: BattleViewerProps) {
       </div>
 
       {/* Winner banner */}
-      {state.status === "finished" && state.winner_id && (
+      {isFinished && state.winner_id && (
         <div className="text-center py-4 mb-6 rounded-xl bg-[var(--color-accent)]/20 border border-[var(--color-accent)]/40">
           <span className="text-lg font-bold">
+            {"🏆"}{" "}
             {state.winner_id === state.agent_a.agent_id
               ? state.agent_a.agent_name
               : state.agent_b.agent_name}{" "}
@@ -101,13 +168,63 @@ export function BattleViewer({ battleId, initialState }: BattleViewerProps) {
         </div>
       )}
 
+      {/* Turn-by-turn replay controls */}
+      {isFinished && maxTurn > 0 && (
+        <div className="flex items-center justify-center gap-3 mb-4">
+          <button
+            onClick={handleFirst}
+            disabled={visibleTurn === 0}
+            className="px-2 py-1 rounded text-sm bg-white/5 border border-white/10 hover:bg-white/10 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+          >
+            {"<<"}
+          </button>
+          <button
+            onClick={handlePrev}
+            disabled={visibleTurn === 0}
+            className="px-3 py-1 rounded text-sm bg-white/5 border border-white/10 hover:bg-white/10 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+          >
+            {"< Prev"}
+          </button>
+          <span className="text-sm font-medium min-w-[80px] text-center">
+            {currentTurnLabel}
+          </span>
+          <button
+            onClick={handleNext}
+            disabled={visibleTurn === maxTurn}
+            className="px-3 py-1 rounded text-sm bg-white/5 border border-white/10 hover:bg-white/10 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+          >
+            {"Next >"}
+          </button>
+          <button
+            onClick={handleLast}
+            disabled={visibleTurn === maxTurn}
+            className="px-2 py-1 rounded text-sm bg-white/5 border border-white/10 hover:bg-white/10 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+          >
+            {">>"}
+          </button>
+        </div>
+      )}
+
       {/* Battle log */}
       <div className="rounded-xl bg-[var(--color-bg-card)] border border-white/10 p-4">
-        <h3 className="font-bold mb-3">Battle Log</h3>
-        <div className="space-y-1 max-h-80 overflow-y-auto text-sm">
-          {state.battle_log.map((event, i) => (
-            <BattleLogEntry key={i} event={event} />
-          ))}
+        <div className="flex items-center justify-between mb-3">
+          <h3 className="font-bold">Battle Log</h3>
+          {isFinished && (
+            <span className="text-xs text-[var(--color-text-secondary)]">
+              Showing {visibleTurn} of {maxTurn} turns
+            </span>
+          )}
+        </div>
+        <div className="space-y-1 max-h-96 overflow-y-auto text-sm">
+          {visibleEvents.length === 0 ? (
+            <div className="text-[var(--color-text-secondary)] text-center py-4">
+              Press Next to step through the battle turn by turn
+            </div>
+          ) : (
+            visibleEvents.map((event, i) => (
+              <BattleLogEntry key={i} event={event} />
+            ))
+          )}
         </div>
       </div>
     </div>
@@ -158,6 +275,8 @@ function BattleLogEntry({ event }: { event: BattleEvent }) {
     card_defeated: "text-red-500 font-bold",
     battle_end: "text-[var(--color-accent)] font-bold",
     critical_hit: "text-yellow-400",
+    turn_start: "text-white/40 border-t border-white/5 pt-2 mt-1",
+    turn_end: "text-white/30",
   };
 
   return (

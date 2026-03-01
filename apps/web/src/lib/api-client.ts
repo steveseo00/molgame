@@ -17,6 +17,16 @@ async function request<T>(path: string, options?: RequestInit): Promise<T> {
   return res.json();
 }
 
+function authRequest<T>(path: string, token: string, options?: RequestInit): Promise<T> {
+  return request<T>(path, {
+    ...options,
+    headers: {
+      Authorization: `Bearer ${token}`,
+      ...options?.headers,
+    },
+  });
+}
+
 export const api = {
   // Agents
   getAgentProfile: (id: string) => request<any>(`/api/v1/agents/${id}/profile`),
@@ -29,6 +39,10 @@ export const api = {
   getCard: (id: string) => request<any>(`/api/v1/cards/${id}`),
 
   // Battles
+  getBattles: (params?: Record<string, string>) => {
+    const query = new URLSearchParams(params).toString();
+    return request<any>(`/api/v1/battle?${query}`);
+  },
   getBattle: (id: string) => request<any>(`/api/v1/battle/${id}`),
   getBattleReplay: (id: string) => request<any>(`/api/v1/battle/${id}/replay`),
 
@@ -46,4 +60,33 @@ export const api = {
 
   // Market
   getAuctions: () => request<any>(`/api/v1/market/auction/list`),
+
+  // Operator auth
+  operatorRegister: (email: string, display_name?: string) =>
+    request<any>(`/api/v1/operators/register`, {
+      method: "POST",
+      body: JSON.stringify({ email, display_name }),
+    }),
+
+  operatorLogin: (email: string) =>
+    request<any>(`/api/v1/operators/login`, {
+      method: "POST",
+      body: JSON.stringify({ email }),
+    }),
+
+  // Operator authenticated
+  getMyProfile: (token: string) =>
+    authRequest<any>(`/api/v1/operators/me`, token),
+
+  claimAgent: (token: string, claim_key: string) =>
+    authRequest<any>(`/api/v1/operators/claim-agent`, token, {
+      method: "POST",
+      body: JSON.stringify({ claim_key }),
+    }),
+
+  createAgentFromDashboard: (token: string, data: { name: string; owner_email: string; model_type?: string }) =>
+    authRequest<any>(`/api/v1/operators/create-agent`, token, {
+      method: "POST",
+      body: JSON.stringify(data),
+    }),
 };

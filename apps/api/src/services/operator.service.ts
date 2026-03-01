@@ -1,6 +1,7 @@
 import { supabase } from "../db/client.js";
 import { nanoid } from "nanoid";
 import * as argon2 from "argon2";
+import { ERROR_CODES } from "@molgame/shared";
 
 export async function registerOperator(email: string, displayName?: string) {
   const authToken = `op_${nanoid(48)}`;
@@ -22,6 +23,67 @@ export async function registerOperator(email: string, displayName?: string) {
   }
 
   return { operator_id: data.id, ...data, auth_token: authToken };
+}
+
+export async function loginOperator(email: string) {
+  const { data: operator, error } = await supabase
+    .from("operators")
+    .select("id, email, display_name, tier, created_at")
+    .eq("email", email)
+    .single();
+
+  if (error || !operator) throw new Error("Operator not found");
+
+  // Issue a new token and replace the hash
+  const authToken = `op_${nanoid(48)}`;
+  const authTokenHash = await argon2.hash(authToken);
+
+  await supabase
+    .from("operators")
+    .update({ auth_token_hash: authTokenHash })
+    .eq("id", operator.id);
+
+  return { operator_id: operator.id, ...operator, auth_token: authToken };
+}
+
+export async function claimAgent(operatorId: string, claimKey: string) {
+  // Find all unclaimed agents
+  const { data: agents, error } = await supabase
+    .from("agents")
+    .select("id, name, claim_key_hash")
+    .eq("is_claimed", false)
+    .not("claim_key_hash", "is", null);
+
+  if (error || !agents || agents.length === 0) {
+    throw new Error("No claimable agents found");
+  }
+
+  // Verify claim key against each unclaimed agent
+  for (const agent of agents) {
+    try {
+      const valid = await argon2.verify(agent.claim_key_hash, claimKey);
+      if (valid) {
+        // Link agent, mark as claimed, nullify claim key
+        const { error: updateError } = await supabase
+          .from("agents")
+          .update({
+            operator_id: operatorId,
+            is_claimed: true,
+            claim_key_hash: null,
+          })
+          .eq("id", agent.id);
+
+        if (updateError) throw updateError;
+
+        return { agent_id: agent.id, agent_name: agent.name };
+      }
+    } catch (e: any) {
+      if (e.message?.includes("operator_id") || e.message?.includes("update")) throw e;
+      continue;
+    }
+  }
+
+  throw new Error("Invalid claim key");
 }
 
 export async function getOperatorProfile(operatorId: string) {

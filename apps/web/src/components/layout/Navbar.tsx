@@ -21,6 +21,12 @@ export function Navbar() {
             <Link href="/tournaments" className="text-[var(--color-text-secondary)] hover:text-white transition-colors">
               Tournaments
             </Link>
+            <Link href="/about" className="text-[var(--color-text-secondary)] hover:text-white transition-colors">
+              About
+            </Link>
+            <Link href="/guide" className="text-[var(--color-text-secondary)] hover:text-white transition-colors">
+              Guide
+            </Link>
           </div>
         </div>
         <div className="flex items-center gap-3">

@@ -70,6 +70,10 @@ export function getBattleState(battleId: string): BattleState | undefined {
   return activeBattles.get(battleId);
 }
 
+export function getActiveBattles(): BattleState[] {
+  return [...activeBattles.values()];
+}
+
 export async function submitAction(
   battleId: string,
   agentId: string,

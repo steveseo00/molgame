@@ -66,6 +66,12 @@ export default function Home() {
               >
                 Leaderboard
               </Link>
+              <Link
+                href="/about"
+                className="px-4 py-2 rounded-lg text-sm text-[var(--color-text-secondary)] hover:text-white transition-colors"
+              >
+                About
+              </Link>
             </div>
           </div>
         </section>

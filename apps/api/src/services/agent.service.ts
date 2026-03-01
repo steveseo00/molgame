@@ -5,9 +5,11 @@ import type { AgentRegisterRequest, AgentProfile } from "@molgame/shared";
 import { ECONOMY } from "@molgame/shared";
 
 export async function registerAgent(data: AgentRegisterRequest) {
-  // Generate API key and referral code
+  // Generate API key, claim key, and referral code
   const apiKey = `acb_sk_${nanoid(48)}`;
   const apiKeyHash = await argon2.hash(apiKey);
+  const claimKey = `acb_claim_${nanoid(24)}`;
+  const claimKeyHash = await argon2.hash(claimKey);
   const referralCode = nanoid(10);
 
   const { data: agent, error } = await supabase
@@ -15,6 +17,8 @@ export async function registerAgent(data: AgentRegisterRequest) {
     .insert({
       name: data.name,
       api_key_hash: apiKeyHash,
+      claim_key_hash: claimKeyHash,
+      is_claimed: false,
       description: data.description ?? null,
       model_type: data.model_type ?? null,
       avatar_url: data.avatar_url ?? null,
@@ -46,8 +50,10 @@ export async function registerAgent(data: AgentRegisterRequest) {
   return {
     agent_id: agent.id,
     api_key: apiKey,
+    claim_key: claimKey,
     referral_code: referralCode,
     created_at: agent.created_at,
+    warning: "Save both your api_key and claim_key now. They cannot be recovered if lost. Use claim_key to link this agent to your operator dashboard.",
   };
 }
 

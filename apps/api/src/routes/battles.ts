@@ -9,6 +9,94 @@ import { supabase } from "../db/client.js";
 
 export const battleRoutes = new Hono();
 
+// Public: List battles (active + recent finished)
+battleRoutes.get("/", async (c) => {
+  const status = c.req.query("status"); // "active" | "finished" | undefined (all)
+  const limit = Math.min(parseInt(c.req.query("limit") ?? "20", 10), 50);
+  const offset = parseInt(c.req.query("offset") ?? "0", 10);
+
+  // Active in-memory battles
+  const activeBattles: any[] = [];
+  if (!status || status === "active") {
+    for (const state of battleService.getActiveBattles()) {
+      activeBattles.push({
+        id: state.battle_id,
+        mode: state.mode,
+        status: state.status,
+        turn: state.turn,
+        agent_a_id: state.agent_a.agent_id,
+        agent_a_name: state.agent_a.agent_name,
+        agent_b_id: state.agent_b.agent_id,
+        agent_b_name: state.agent_b.agent_name,
+        winner_id: state.winner_id,
+        started_at: state.started_at,
+        finished_at: state.finished_at,
+      });
+    }
+  }
+
+  // DB battles (finished or all)
+  let query = supabase
+    .from("battles")
+    .select(
+      "id, mode, status, turns, agent_a_id, agent_b_id, winner_id, elo_change_a, elo_change_b, spark_reward_a, spark_reward_b, started_at, finished_at",
+    )
+    .order("started_at", { ascending: false })
+    .range(offset, offset + limit - 1);
+
+  if (status === "finished") {
+    query = query.eq("status", "finished");
+  } else if (status === "active") {
+    query = query.eq("status", "active");
+  }
+
+  const { data: dbBattles } = await query;
+
+  // Resolve agent names
+  const agentIds = new Set<string>();
+  for (const b of dbBattles ?? []) {
+    if (b.agent_a_id) agentIds.add(b.agent_a_id);
+    if (b.agent_b_id) agentIds.add(b.agent_b_id);
+  }
+  const agentNames: Record<string, string> = {};
+  if (agentIds.size > 0) {
+    const { data: agents } = await supabase
+      .from("agents")
+      .select("id, name")
+      .in("id", [...agentIds]);
+    for (const a of agents ?? []) {
+      agentNames[a.id] = a.name;
+    }
+  }
+
+  const recentBattles = (dbBattles ?? []).map((b) => ({
+    id: b.id,
+    mode: b.mode,
+    status: b.status,
+    turns: b.turns,
+    agent_a_id: b.agent_a_id,
+    agent_a_name: agentNames[b.agent_a_id] ?? "Unknown",
+    agent_b_id: b.agent_b_id,
+    agent_b_name: agentNames[b.agent_b_id] ?? "Unknown",
+    winner_id: b.winner_id,
+    elo_change_a: b.elo_change_a,
+    elo_change_b: b.elo_change_b,
+    spark_reward_a: b.spark_reward_a,
+    spark_reward_b: b.spark_reward_b,
+    started_at: b.started_at,
+    finished_at: b.finished_at,
+  }));
+
+  // Merge: active in-memory battles first, then DB (deduplicated)
+  const activeIds = new Set(activeBattles.map((b) => b.id));
+  const merged = [
+    ...activeBattles,
+    ...recentBattles.filter((b) => !activeIds.has(b.id)),
+  ];
+
+  return c.json({ battles: merged });
+});
+
 // Public: Get battle state (for spectators)
 battleRoutes.get("/:id", async (c) => {
   const battleId = c.req.param("id");
