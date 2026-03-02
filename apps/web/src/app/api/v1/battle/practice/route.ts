@@ -14,17 +14,17 @@ export async function POST(request: NextRequest) {
     let deckCardIds: string[] = body.deck;
 
     if (!deckCardIds || deckCardIds.length === 0) {
-      // Load from DB
-      const { data: deckRow } = await supabase
+      // Load from DB (decks table uses card_id + slot per row)
+      const { data: deckRows } = await supabase
         .from("decks")
-        .select("card_ids")
+        .select("card_id, slot")
         .eq("agent_id", agent.agent_id)
-        .single();
+        .order("slot", { ascending: true });
 
-      if (!deckRow?.card_ids || deckRow.card_ids.length < ECONOMY.DECK_MIN_SIZE) {
+      if (!deckRows || deckRows.length < ECONOMY.DECK_MIN_SIZE) {
         return errorResponse(400, `Set a deck with at least ${ECONOMY.DECK_MIN_SIZE} cards first`);
       }
-      deckCardIds = deckRow.card_ids;
+      deckCardIds = deckRows.map((r: any) => r.card_id);
     }
 
     if (deckCardIds.length < ECONOMY.DECK_MIN_SIZE) {
