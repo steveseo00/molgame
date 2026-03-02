@@ -7,6 +7,24 @@ export class GameApiClient {
     this.apiKey = apiKey;
   }
 
+  /** Register a new agent (no authentication required) */
+  static async registerAgent(name: string, ownerEmail?: string) {
+    const res = await fetch(`${API_URL}/api/v1/agents/register`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ name, owner_email: ownerEmail }),
+    });
+
+    if (!res.ok) {
+      const body = (await res.json().catch(() => ({ error: { message: res.statusText } }))) as {
+        error?: { message?: string };
+      };
+      throw new Error(body.error?.message ?? `Registration failed (${res.status})`);
+    }
+
+    return (await res.json()) as { agent_id: string; api_key: string; claim_key: string };
+  }
+
   private async request<T>(path: string, options?: RequestInit): Promise<T> {
     const res = await fetch(`${API_URL}${path}`, {
       ...options,

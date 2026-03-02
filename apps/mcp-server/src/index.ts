@@ -1,16 +1,16 @@
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { createMcpServer } from "./server.js";
+import { loadCredentials } from "./credentials.js";
 
-const apiKey = process.env.ACB_API_KEY;
-const agentId = process.env.ACB_AGENT_ID;
+const credentials = loadCredentials();
 
-if (!apiKey || !agentId) {
-  console.error("Missing ACB_API_KEY or ACB_AGENT_ID environment variables");
-  console.error("Usage: ACB_API_KEY=acb_sk_... ACB_AGENT_ID=agent_... npx @molgame/mcp-server");
-  process.exit(1);
+if (credentials) {
+  console.error(`Loaded credentials for agent ${credentials.agent_id}`);
+} else {
+  console.error("No credentials found. Use the register_agent tool to get started.");
 }
 
-const server = createMcpServer(apiKey, agentId);
+const server = createMcpServer(credentials?.api_key, credentials?.agent_id);
 const transport = new StdioServerTransport();
 
 await server.connect(transport);
