@@ -189,7 +189,8 @@ export function generateBotAction(
 
 // ─── Start Practice Battle ──────────────────────────────────────────────────
 
-const BOT_AGENT_ID = "bot-practice";
+// Fixed UUID for the practice bot (deterministic, not a real agent)
+const BOT_AGENT_ID = "00000000-0000-0000-0000-000000000000";
 const BOT_AGENT_NAME = "Practice Bot";
 
 export { BOT_AGENT_ID };
