@@ -1,6 +1,6 @@
 import type { Card } from "./card";
 
-export type BattleMode = "ranked" | "casual" | "tournament";
+export type BattleMode = "ranked" | "casual" | "tournament" | "practice";
 
 export type BattleStatus =
   | "queued"

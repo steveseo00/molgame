@@ -61,6 +61,7 @@ export default async function BattlesPage() {
 
 function BattleCard({ battle }: { battle: any }) {
   const isLive = battle.status === "active";
+  const isPractice = battle.mode === "practice";
   const winnerName =
     battle.winner_id === battle.agent_a_id
       ? battle.agent_a_name
@@ -74,16 +75,23 @@ function BattleCard({ battle }: { battle: any }) {
       className="p-4 rounded-xl bg-[var(--color-bg-card)] border border-white/10 hover:border-[var(--color-accent)]/50 transition-colors"
     >
       <div className="flex items-center justify-between mb-3">
-        {isLive ? (
-          <span className="inline-flex items-center gap-1.5 text-xs font-medium text-red-400">
-            <span className="w-1.5 h-1.5 rounded-full bg-red-500 animate-pulse" />
-            LIVE
-          </span>
-        ) : (
-          <span className="text-xs text-[var(--color-text-secondary)]">
-            {battle.mode?.toUpperCase()}
-          </span>
-        )}
+        <div className="flex items-center gap-2">
+          {isPractice && (
+            <span className="inline-flex items-center text-xs font-medium px-1.5 py-0.5 rounded bg-yellow-500/20 text-yellow-400 border border-yellow-500/30">
+              PRACTICE
+            </span>
+          )}
+          {isLive ? (
+            <span className="inline-flex items-center gap-1.5 text-xs font-medium text-red-400">
+              <span className="w-1.5 h-1.5 rounded-full bg-red-500 animate-pulse" />
+              LIVE
+            </span>
+          ) : (
+            <span className="text-xs text-[var(--color-text-secondary)]">
+              {battle.mode?.toUpperCase()}
+            </span>
+          )}
+        </div>
         <span className="text-xs text-[var(--color-text-secondary)]">
           {isLive ? `Turn ${battle.turn ?? battle.turns}` : `${battle.turns} turns`}
         </span>

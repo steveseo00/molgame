@@ -1,28 +1,48 @@
-import { api } from "@/lib/api-client";
+"use client";
+
+import { useState, useEffect } from "react";
+import { useParams } from "next/navigation";
 import { BattleViewer } from "@/components/battle/BattleViewer";
 import Link from "next/link";
 
-export default async function BattlePage({
-  params,
-}: {
-  params: Promise<{ id: string }>;
-}) {
-  const { id } = await params;
-
-  let battle = null;
-  try {
-    battle = await api.getBattle(id);
-  } catch {
-    // API not connected
-  }
-
-  // For finished battles stored in DB, the shape is different (flat DB row)
-  // Normalize: if battle_state exists as a nested object, use it
-  if (battle && battle.battle_state && !battle.battle_id) {
-    battle = {
-      ...battle.battle_state,
-      battle_log: battle.battle_log ?? battle.battle_state.battle_log ?? [],
+function normalizeBattle(data: any) {
+  if (data && data.battle_state && !data.battle_id) {
+    return {
+      ...data.battle_state,
+      battle_log: data.battle_log ?? data.battle_state.battle_log ?? [],
     };
+  }
+  return data;
+}
+
+export default function BattlePage() {
+  const { id } = useParams<{ id: string }>();
+  const [battle, setBattle] = useState<any>(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    async function load() {
+      try {
+        const res = await fetch(`/api/v1/battle/${id}`);
+        if (res.ok) {
+          const data = await res.json();
+          setBattle(normalizeBattle(data));
+        }
+      } catch {
+        // API not connected
+      } finally {
+        setLoading(false);
+      }
+    }
+    load();
+  }, [id]);
+
+  if (loading) {
+    return (
+      <div className="text-center py-20">
+        <p className="text-[var(--color-text-secondary)]">Loading battle...</p>
+      </div>
+    );
   }
 
   if (!battle) {

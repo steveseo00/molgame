@@ -1,5 +1,6 @@
 import { supabase } from "./supabase-server";
 import { getCardById } from "./card-service";
+import { generateBotAction, BOT_AGENT_ID } from "./practice-service";
 import type {
   Card,
   BattleState,
@@ -159,6 +160,38 @@ export async function submitAction(
     throw new Error("Agent is not in this battle");
   }
 
+  // Practice mode: auto-generate bot action and process turn immediately
+  if (state.mode === "practice") {
+    const botId = state.agent_a.agent_id === BOT_AGENT_ID
+      ? state.agent_a.agent_id
+      : state.agent_b.agent_id;
+    const botAction = generateBotAction(state, botId);
+
+    const isAgentA = agentId === state.agent_a.agent_id;
+    const playerAction = { action, skill_id: skillId, card_id: cardId };
+
+    const updatedState = processTurn(
+      state,
+      isAgentA ? playerAction : botAction,
+      isAgentA ? botAction : playerAction,
+    );
+
+    // Update battle in DB
+    await supabase
+      .from("battles")
+      .update({
+        status: updatedState.status,
+        turns: updatedState.turn,
+        battle_state: updatedState,
+        battle_log: updatedState.battle_log,
+        winner_id: updatedState.winner_id,
+        finished_at: updatedState.finished_at,
+      })
+      .eq("id", battleId);
+
+    return { waiting: false, state: sanitizeBattleState(updatedState) };
+  }
+
   // Upsert pending action
   await supabase.from("battle_pending_actions").upsert(
     { battle_id: battleId, agent_id: agentId, action, skill_id: skillId ?? null, card_id: cardId ?? null },
@@ -217,6 +250,7 @@ export async function submitAction(
 }
 
 async function processPostBattle(state: BattleState) {
+  if (state.mode === "practice") return; // no rewards for practice
   if (!state.winner_id) return; // draw
 
   const winnerId = state.winner_id;

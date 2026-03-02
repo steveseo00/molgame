@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo, useCallback } from "react";
+import { useState, useMemo, useCallback, useEffect, useRef } from "react";
 import type { BattleState, BattleEvent } from "@molgame/shared";
 import { ELEMENT_ICONS } from "@molgame/shared";
 import { cn } from "@/lib/utils";
@@ -13,8 +13,35 @@ interface BattleViewerProps {
   initialState: BattleState | null;
 }
 
-export function BattleViewer({ initialState }: BattleViewerProps) {
-  const [state] = useState<BattleState | null>(initialState);
+export function BattleViewer({ battleId, initialState }: BattleViewerProps) {
+  const [state, setState] = useState<BattleState | null>(initialState);
+  const prevTurnRef = useRef(initialState?.turn ?? 0);
+
+  // Poll for updates when battle is active
+  useEffect(() => {
+    if (!state || state.status !== "active") return;
+
+    const interval = setInterval(async () => {
+      try {
+        const res = await fetch(`/api/v1/battle/${battleId}`);
+        if (!res.ok) return;
+        const data = await res.json();
+        // Normalize DB row format
+        let updated = data;
+        if (updated.battle_state && !updated.battle_id) {
+          updated = {
+            ...updated.battle_state,
+            battle_log: updated.battle_log ?? updated.battle_state.battle_log ?? [],
+          };
+        }
+        setState(updated);
+      } catch {
+        // ignore polling errors
+      }
+    }, 3000);
+
+    return () => clearInterval(interval);
+  }, [battleId, state?.status]);
 
   // Group battle_log events by turn
   const turnGroups = useMemo(() => {
@@ -39,6 +66,21 @@ export function BattleViewer({ initialState }: BattleViewerProps) {
 
   const maxTurn = turnGroups.length;
   const [visibleTurn, setVisibleTurn] = useState(maxTurn); // show all by default
+
+  // Auto-advance visibleTurn when new turns arrive during active battle
+  useEffect(() => {
+    if (state && state.status === "active" && state.turn > prevTurnRef.current) {
+      setVisibleTurn(maxTurn);
+    }
+    prevTurnRef.current = state?.turn ?? 0;
+  }, [state?.turn, state?.status, maxTurn]);
+
+  // When battle finishes, show all turns
+  useEffect(() => {
+    if (state?.status === "finished") {
+      setVisibleTurn(maxTurn);
+    }
+  }, [state?.status, maxTurn]);
 
   const visibleEvents = useMemo(() => {
     return turnGroups.slice(0, visibleTurn).flatMap((g) => g.events);
@@ -76,6 +118,7 @@ export function BattleViewer({ initialState }: BattleViewerProps) {
   const cardA = state.agent_a.cards[state.agent_a.active_card_index];
   const cardB = state.agent_b.cards[state.agent_b.active_card_index];
   const isFinished = state.status === "finished";
+  const isPractice = state.mode === "practice";
 
   return (
     <div className="max-w-4xl mx-auto">
@@ -90,6 +133,11 @@ export function BattleViewer({ initialState }: BattleViewerProps) {
       {/* Battle header */}
       <div className="flex items-center justify-between mb-6">
         <div className="flex items-center gap-2">
+          {isPractice && (
+            <Badge variant="default" className="bg-yellow-500/20 text-yellow-400 border-yellow-500/40">
+              PRACTICE
+            </Badge>
+          )}
           <Badge variant={state.status === "active" ? "element" : "default"} element="fire">
             {state.status === "active" ? "LIVE" : state.status.toUpperCase()}
           </Badge>
@@ -214,11 +262,18 @@ export function BattleViewer({ initialState }: BattleViewerProps) {
               Showing {visibleTurn} of {maxTurn} turns
             </span>
           )}
+          {state.status === "active" && (
+            <span className="text-xs text-[var(--color-text-secondary)] animate-pulse">
+              Live updating...
+            </span>
+          )}
         </div>
         <div className="space-y-1 max-h-96 overflow-y-auto text-sm">
           {visibleEvents.length === 0 ? (
             <div className="text-[var(--color-text-secondary)] text-center py-4">
-              Press Next to step through the battle turn by turn
+              {isFinished
+                ? "Press Next to step through the battle turn by turn"
+                : "Waiting for battle actions..."}
             </div>
           ) : (
             visibleEvents.map((event, i) => (

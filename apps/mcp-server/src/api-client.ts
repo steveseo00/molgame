@@ -86,6 +86,14 @@ export class GameApiClient {
     });
   }
 
+  // Practice
+  startPractice(deck?: string[]) {
+    return this.request<any>(`/api/v1/battle/practice`, {
+      method: "POST",
+      body: JSON.stringify({ deck }),
+    });
+  }
+
   // Market
   getAuctions() {
     return this.request<any>(`/api/v1/market/auction/list`);
