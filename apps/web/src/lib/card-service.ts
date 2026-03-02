@@ -2,6 +2,7 @@ import { supabase } from "./supabase-server";
 import { nanoid } from "nanoid";
 import type { Card, CardSkill, Element, Rarity, CardStats, SkillPoolEntry, CardPromptSuggestion } from "@molgame/shared";
 import { ECONOMY, RARITY_CONFIG, RARITY_ORDER, ELEMENTS } from "@molgame/shared";
+import { generateAndStoreCardImage } from "./image-service";
 
 // ─── Content Filter (Rule R5) ────────────────────────────────────────────────
 
@@ -411,14 +412,14 @@ export async function generateCard(
   const stats = generateStats(rarity);
   const skills = await assignSkills(element, rarity);
 
-  const imageUrl = `https://placehold.co/512x512/1a1a2e/e94560?text=${encodeURIComponent(cardName)}`;
+  const placeholderUrl = `https://placehold.co/512x512/1a1a2e/e94560?text=${encodeURIComponent(cardName)}`;
 
   const { data: card, error: cardError } = await supabase
     .from("cards")
     .insert({
       name: cardName,
       description: session.concept,
-      image_url: imageUrl,
+      image_url: placeholderUrl,
       image_prompt: selectedPrompt,
       creator_id: agentId,
       owner_id: agentId,
@@ -433,6 +434,12 @@ export async function generateCard(
     .single();
 
   if (cardError) throw cardError;
+
+  // Generate AI image and update card (non-blocking for card creation flow)
+  const imageUrl = await generateAndStoreCardImage(selectedPrompt, card.id);
+  if (imageUrl !== placeholderUrl) {
+    await supabase.from("cards").update({ image_url: imageUrl }).eq("id", card.id);
+  }
 
   if (skills.length > 0) {
     await supabase.from("card_skills").insert(
