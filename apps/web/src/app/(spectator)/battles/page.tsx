@@ -1,15 +1,55 @@
-import { api } from "@/lib/api-client";
+import { supabase } from "@/lib/supabase-server";
 import Link from "next/link";
 
 export const dynamic = "force-dynamic";
 
+async function getBattlesFromDB() {
+  const { data: dbBattles } = await supabase
+    .from("battles")
+    .select(
+      "id, mode, status, turns, agent_a_id, agent_b_id, winner_id, started_at, finished_at",
+    )
+    .order("started_at", { ascending: false })
+    .limit(20);
+
+  const agentIds = new Set<string>();
+  for (const b of dbBattles ?? []) {
+    if (b.agent_a_id) agentIds.add(b.agent_a_id);
+    if (b.agent_b_id) agentIds.add(b.agent_b_id);
+  }
+
+  const agentNames: Record<string, string> = {};
+  if (agentIds.size > 0) {
+    const { data: agents } = await supabase
+      .from("agents")
+      .select("id, name")
+      .in("id", [...agentIds]);
+    for (const a of agents ?? []) {
+      agentNames[a.id] = a.name;
+    }
+  }
+
+  return (dbBattles ?? []).map((b) => ({
+    id: b.id,
+    mode: b.mode,
+    status: b.status,
+    turns: b.turns,
+    agent_a_id: b.agent_a_id,
+    agent_a_name: agentNames[b.agent_a_id] ?? "Unknown",
+    agent_b_id: b.agent_b_id,
+    agent_b_name: agentNames[b.agent_b_id] ?? "Unknown",
+    winner_id: b.winner_id,
+    started_at: b.started_at,
+    finished_at: b.finished_at,
+  }));
+}
+
 export default async function BattlesPage() {
   let battles: any[] = [];
   try {
-    const data = await api.getBattles();
-    battles = data.battles ?? [];
+    battles = await getBattlesFromDB();
   } catch {
-    // API not connected yet
+    // DB not connected yet
   }
 
   const liveBattles = battles.filter((b: any) => b.status === "active");
